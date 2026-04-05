@@ -6,7 +6,14 @@
     <div class="foto-nano-screen foto-nano-screen--active" data-screen="capture">
         <div class="foto-nano-header">
             <h2>Foto-Nano</h2>
-            <p>Toma una foto para crear tu imagen personalizada</p>
+            <p>Toma una foto para crear tu imagen personalizada con IA</p>
+            <?php
+            $settings = get_option( 'foto_nano_settings', array() );
+            $provider = $settings['active_provider'] ?? 'replicate';
+            $providers_info = Foto_Nano_Api::get_providers_info();
+            $provider_name = $providers_info[ $provider ]['name'] ?? 'IA';
+            ?>
+            <div class="foto-nano-provider-badge">Potenciado por <?php echo esc_html( $provider_name ); ?></div>
         </div>
 
         <div class="foto-nano-camera-wrapper">
@@ -34,7 +41,7 @@
     <div class="foto-nano-screen" data-screen="mode">
         <div class="foto-nano-header">
             <h2>Elige tu estilo</h2>
-            <p>Selecciona como quieres tu imagen</p>
+            <p>Selecciona como quieres transformar tu imagen</p>
         </div>
 
         <div class="foto-nano-modes">
@@ -47,18 +54,18 @@
             <div class="foto-nano-mode-card" data-mode="fondo">
                 <div class="foto-nano-mode-icon">&#127956;</div>
                 <h3>Fondo Escenico</h3>
-                <p>Tu foto en paisajes, templos o sitios antiguos</p>
+                <p>Tu foto en paisajes, templos o sitios historicos</p>
             </div>
 
             <div class="foto-nano-mode-card" data-mode="postal">
                 <div class="foto-nano-mode-icon">&#9993;</div>
                 <h3>Postal Personalizada</h3>
-                <p>Una postal con tu nombre, mascota y marco</p>
+                <p>Una postal unica con tu nombre y marco</p>
             </div>
         </div>
 
         <button type="button" class="foto-nano-btn foto-nano-btn--back foto-nano-btn-back" data-back="capture">
-            &larr; Volver
+            &larr; Volver a la camara
         </button>
     </div>
 
@@ -90,13 +97,13 @@
         <!-- Nombre (postal) -->
         <div id="foto-nano-opt-nombre" class="foto-nano-option-group" style="display:none;">
             <label for="foto-nano-nombre">Tu nombre:</label>
-            <input type="text" id="foto-nano-nombre" class="foto-nano-input" placeholder="Escribe tu nombre" maxlength="40">
+            <input type="text" id="foto-nano-nombre" class="foto-nano-input" placeholder="Escribe tu nombre" maxlength="40" autocomplete="off">
         </div>
 
         <!-- Texto postal -->
         <div id="foto-nano-opt-texto" class="foto-nano-option-group" style="display:none;">
             <label for="foto-nano-texto-postal">Texto de la postal:</label>
-            <input type="text" id="foto-nano-texto-postal" class="foto-nano-input" maxlength="80">
+            <input type="text" id="foto-nano-texto-postal" class="foto-nano-input" maxlength="80" autocomplete="off">
         </div>
 
         <!-- Selector de formato -->
@@ -120,7 +127,8 @@
         <div class="foto-nano-generating">
             <div class="foto-nano-spinner"></div>
             <h2>Generando tu imagen...</h2>
-            <p>Esto puede tomar unos segundos. La IA esta trabajando en tu foto.</p>
+            <p id="foto-nano-generating-status">La IA esta trabajando en tu foto.</p>
+            <div class="foto-nano-provider-badge">Procesando con <?php echo esc_html( $provider_name ); ?></div>
             <div class="foto-nano-progress">
                 <div class="foto-nano-progress-bar" id="foto-nano-progress-bar"></div>
             </div>
@@ -140,7 +148,7 @@
         <div class="foto-nano-email-section">
             <label for="foto-nano-email">Enviar a tu correo electronico:</label>
             <div class="foto-nano-email-row">
-                <input type="email" id="foto-nano-email" class="foto-nano-input" placeholder="tucorreo@ejemplo.com">
+                <input type="email" id="foto-nano-email" class="foto-nano-input" placeholder="tucorreo@ejemplo.com" autocomplete="email">
                 <button type="button" id="foto-nano-btn-send-email" class="foto-nano-btn foto-nano-btn--primary">
                     Enviar
                 </button>

@@ -65,6 +65,29 @@
         $(document).on('input', '.foto-nano-range', function() {
             $(this).siblings('.foto-nano-range-value').text($(this).val() + '%');
         });
+
+        // Toggle API key visibility
+        $(document).on('click', '.foto-nano-toggle-key', function() {
+            var input = $(this).siblings('.foto-nano-api-key-input');
+            var icon = $(this).find('.dashicons');
+            if (input.attr('type') === 'password') {
+                input.attr('type', 'text');
+                icon.removeClass('dashicons-visibility').addClass('dashicons-hidden');
+            } else {
+                input.attr('type', 'password');
+                icon.removeClass('dashicons-hidden').addClass('dashicons-visibility');
+            }
+        });
+
+        // Highlight active provider card when selector changes
+        $('#active_provider').on('change', function() {
+            var selected = $(this).val();
+            $('.foto-nano-provider-card').removeClass('active');
+            $('.foto-nano-badge-active').remove();
+            var card = $('.foto-nano-provider-card[data-provider="' + selected + '"]');
+            card.addClass('active');
+            card.find('.foto-nano-provider-header strong').after('<span class="foto-nano-badge-active">ACTIVO</span>');
+        });
     });
 
 })(jQuery);

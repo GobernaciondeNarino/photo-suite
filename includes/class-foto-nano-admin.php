@@ -36,13 +36,21 @@ class Foto_Nano_Admin {
         $active_tab = sanitize_text_field( $_GET['tab'] ?? 'general' );
         ?>
         <div class="wrap foto-nano-admin">
-            <h1><span class="dashicons dashicons-camera" style="font-size:28px;margin-right:8px;"></span> Foto-Nano - Configuracion</h1>
+            <h1><span class="dashicons dashicons-camera" style="font-size:28px;margin-right:8px;"></span> Foto-Nano v<?php echo esc_html( FOTO_NANO_VERSION ); ?></h1>
 
             <nav class="nav-tab-wrapper">
-                <a href="?page=foto-nano&tab=general" class="nav-tab <?php echo $active_tab === 'general' ? 'nav-tab-active' : ''; ?>">General</a>
-                <a href="?page=foto-nano&tab=mascotas" class="nav-tab <?php echo $active_tab === 'mascotas' ? 'nav-tab-active' : ''; ?>">Mascotas</a>
-                <a href="?page=foto-nano&tab=fondos" class="nav-tab <?php echo $active_tab === 'fondos' ? 'nav-tab-active' : ''; ?>">Fondos Escenicos</a>
-                <a href="?page=foto-nano&tab=postal" class="nav-tab <?php echo $active_tab === 'postal' ? 'nav-tab-active' : ''; ?>">Postal</a>
+                <a href="?page=foto-nano&tab=general" class="nav-tab <?php echo $active_tab === 'general' ? 'nav-tab-active' : ''; ?>">
+                    <span class="dashicons dashicons-admin-settings" style="margin-right:4px;"></span> General
+                </a>
+                <a href="?page=foto-nano&tab=mascotas" class="nav-tab <?php echo $active_tab === 'mascotas' ? 'nav-tab-active' : ''; ?>">
+                    <span class="dashicons dashicons-pets" style="margin-right:4px;"></span> Mascotas
+                </a>
+                <a href="?page=foto-nano&tab=fondos" class="nav-tab <?php echo $active_tab === 'fondos' ? 'nav-tab-active' : ''; ?>">
+                    <span class="dashicons dashicons-format-image" style="margin-right:4px;"></span> Fondos
+                </a>
+                <a href="?page=foto-nano&tab=postal" class="nav-tab <?php echo $active_tab === 'postal' ? 'nav-tab-active' : ''; ?>">
+                    <span class="dashicons dashicons-email-alt" style="margin-right:4px;"></span> Postal
+                </a>
             </nav>
 
             <form method="post" action="">
@@ -67,7 +75,9 @@ class Foto_Nano_Admin {
                 ?>
 
                 <p class="submit">
-                    <button type="submit" name="foto_nano_save" class="button button-primary">Guardar Cambios</button>
+                    <button type="submit" name="foto_nano_save" class="button button-primary button-hero">
+                        <span class="dashicons dashicons-saved" style="margin-right:4px;margin-top:4px;"></span> Guardar Cambios
+                    </button>
                 </p>
             </form>
         </div>
@@ -92,14 +102,47 @@ class Foto_Nano_Admin {
 
         switch ( $tab ) {
             case 'general':
-                $settings['replicate_api_key']    = sanitize_text_field( $_POST['replicate_api_key'] ?? '' );
-                $settings['replicate_model']      = sanitize_text_field( $_POST['replicate_model'] ?? 'lucataco/facefusion' );
-                $settings['formato_defecto']      = sanitize_text_field( $_POST['formato_defecto'] ?? '1:1' );
-                $settings['email_remitente']      = sanitize_email( $_POST['email_remitente'] ?? '' );
-                $settings['email_asunto']         = sanitize_text_field( $_POST['email_asunto'] ?? '' );
-                $settings['email_plantilla']      = wp_kses_post( $_POST['email_plantilla'] ?? '' );
-                $settings['limite_generaciones']  = absint( $_POST['limite_generaciones'] ?? 10 );
+                // Proveedor activo
+                $allowed_providers = array( 'replicate', 'huggingface', 'openai', 'google', 'anthropic' );
+                $active_provider = sanitize_text_field( $_POST['active_provider'] ?? 'replicate' );
+                $settings['active_provider'] = in_array( $active_provider, $allowed_providers, true ) ? $active_provider : 'replicate';
 
+                // API Keys - encriptar antes de guardar
+                $api_keys = array();
+                if ( ! empty( $_POST['api_keys'] ) && is_array( $_POST['api_keys'] ) ) {
+                    foreach ( $_POST['api_keys'] as $provider_id => $key ) {
+                        $provider_id = sanitize_key( $provider_id );
+                        if ( ! in_array( $provider_id, $allowed_providers, true ) ) {
+                            continue;
+                        }
+                        $key = sanitize_text_field( $key );
+                        if ( ! empty( $key ) ) {
+                            $api_keys[ $provider_id ] = Foto_Nano_Security::encrypt( $key );
+                        }
+                    }
+                }
+                $settings['api_keys'] = $api_keys;
+
+                // Modelos por proveedor
+                $provider_models = array();
+                if ( ! empty( $_POST['provider_models'] ) && is_array( $_POST['provider_models'] ) ) {
+                    foreach ( $_POST['provider_models'] as $provider_id => $model ) {
+                        $provider_id = sanitize_key( $provider_id );
+                        if ( in_array( $provider_id, $allowed_providers, true ) ) {
+                            $provider_models[ $provider_id ] = sanitize_text_field( $model );
+                        }
+                    }
+                }
+                $settings['provider_models'] = $provider_models;
+
+                // Compatibilidad: mantener replicate_api_key para migracion
+                if ( ! empty( $api_keys['replicate'] ) ) {
+                    $settings['replicate_api_key'] = $api_keys['replicate'];
+                }
+                $settings['replicate_model'] = $provider_models['replicate'] ?? 'lucataco/facefusion';
+
+                // Formatos
+                $settings['formato_defecto'] = sanitize_text_field( $_POST['formato_defecto'] ?? '1:1' );
                 $formatos = array();
                 $allowed_formats = array( '1:1', '9:16', '16:9', '4:3', '3:4' );
                 foreach ( $allowed_formats as $f ) {
@@ -109,6 +152,17 @@ class Foto_Nano_Admin {
                     }
                 }
                 $settings['formatos_habilitados'] = ! empty( $formatos ) ? $formatos : array( '1:1' );
+
+                // Email
+                $settings['email_remitente']     = sanitize_email( $_POST['email_remitente'] ?? '' );
+                $settings['email_asunto']        = sanitize_text_field( $_POST['email_asunto'] ?? '' );
+                $settings['email_plantilla']     = wp_kses_post( $_POST['email_plantilla'] ?? '' );
+
+                // Seguridad
+                $settings['limite_generaciones'] = absint( $_POST['limite_generaciones'] ?? 10 );
+                $settings['rate_limit_per_hour'] = absint( $_POST['rate_limit_per_hour'] ?? 20 );
+                $settings['max_upload_size']     = absint( $_POST['max_upload_size'] ?? 10 );
+                $settings['auto_cleanup']        = ! empty( $_POST['auto_cleanup'] ) ? 1 : 0;
                 break;
 
             case 'mascotas':
@@ -171,8 +225,19 @@ class Foto_Nano_Admin {
     }
 
     /**
-     * Convertir path del servidor a URL publica.
+     * Obtener modelo por defecto para un proveedor.
      */
+    private function get_default_model( $provider_id ) {
+        $defaults = array(
+            'replicate'   => 'lucataco/facefusion',
+            'huggingface' => 'stabilityai/stable-diffusion-xl-base-1.0',
+            'openai'      => 'gpt-image-1',
+            'google'      => 'gemini-2.0-flash-exp',
+            'anthropic'   => 'claude-sonnet-4-20250514',
+        );
+        return $defaults[ $provider_id ] ?? '';
+    }
+
     public function path_to_url( $path ) {
         $upload_dir = wp_upload_dir();
         return str_replace( $upload_dir['basedir'], $upload_dir['baseurl'], $path );
