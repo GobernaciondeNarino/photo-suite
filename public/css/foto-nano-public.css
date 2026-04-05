@@ -1,0 +1,507 @@
+/* ========================================
+   FOTO-NANO - Frontend Styles
+   ======================================== */
+
+.foto-nano-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: #333;
+    position: relative;
+}
+
+/* Screens */
+.foto-nano-screen {
+    display: none;
+    animation: fotoNanoFadeIn 0.3s ease;
+}
+
+.foto-nano-screen--active {
+    display: block;
+}
+
+@keyframes fotoNanoFadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Header */
+.foto-nano-header {
+    text-align: center;
+    margin-bottom: 25px;
+}
+
+.foto-nano-header h2 {
+    font-size: 28px;
+    font-weight: 700;
+    color: #1a1a2e;
+    margin: 0 0 8px;
+}
+
+.foto-nano-header p {
+    font-size: 16px;
+    color: #666;
+    margin: 0;
+}
+
+/* Camera */
+.foto-nano-camera-wrapper {
+    position: relative;
+    width: 100%;
+    max-width: 500px;
+    margin: 0 auto 20px;
+    border-radius: 16px;
+    overflow: hidden;
+    background: #000;
+    aspect-ratio: 4/3;
+}
+
+#foto-nano-video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transform: scaleX(-1);
+}
+
+.foto-nano-preview-img {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.foto-nano-preview-img img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Camera Controls */
+.foto-nano-camera-controls {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+    margin-top: 20px;
+}
+
+/* Buttons */
+.foto-nano-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 28px;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-decoration: none;
+}
+
+.foto-nano-btn--primary {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: #fff;
+}
+
+.foto-nano-btn--primary:hover {
+    background: linear-gradient(135deg, #5a6fd6, #6a4294);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.foto-nano-btn--secondary {
+    background: #f0f0f0;
+    color: #333;
+}
+
+.foto-nano-btn--secondary:hover {
+    background: #e0e0e0;
+}
+
+.foto-nano-btn--back {
+    background: transparent;
+    color: #667eea;
+    padding: 8px 16px;
+    font-size: 14px;
+}
+
+.foto-nano-btn--round {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    padding: 0;
+    font-size: 24px;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+.foto-nano-btn--large {
+    padding: 16px 40px;
+    font-size: 18px;
+}
+
+.foto-nano-icon-camera::before {
+    content: "";
+    display: block;
+    width: 30px;
+    height: 30px;
+    border: 3px solid #fff;
+    border-radius: 50%;
+}
+
+/* Mode Cards */
+.foto-nano-modes {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-bottom: 25px;
+}
+
+.foto-nano-mode-card {
+    background: #fff;
+    border: 2px solid #e8e8e8;
+    border-radius: 16px;
+    padding: 30px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.foto-nano-mode-card:hover {
+    border-color: #667eea;
+    transform: translateY(-4px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+.foto-nano-mode-card.selected {
+    border-color: #667eea;
+    background: linear-gradient(135deg, #f8f9ff, #f0f2ff);
+}
+
+.foto-nano-mode-icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+    line-height: 1;
+}
+
+.foto-nano-mode-card h3 {
+    font-size: 18px;
+    font-weight: 700;
+    margin: 0 0 8px;
+    color: #1a1a2e;
+}
+
+.foto-nano-mode-card p {
+    font-size: 14px;
+    color: #888;
+    margin: 0;
+}
+
+/* Options */
+.foto-nano-option-group {
+    margin-bottom: 25px;
+}
+
+.foto-nano-option-group > label {
+    display: block;
+    font-size: 15px;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 10px;
+}
+
+/* Grid items (mascotas, fondos, marcos) */
+.foto-nano-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 12px;
+}
+
+.foto-nano-grid-item {
+    border: 2px solid #e8e8e8;
+    border-radius: 12px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.foto-nano-grid-item:hover {
+    border-color: #667eea;
+}
+
+.foto-nano-grid-item.selected {
+    border-color: #667eea;
+    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.3);
+}
+
+.foto-nano-grid-item.selected::after {
+    content: "\2713";
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 24px;
+    height: 24px;
+    background: #667eea;
+    color: #fff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.foto-nano-grid-item img {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    display: block;
+}
+
+.foto-nano-grid-item-name {
+    padding: 6px 8px;
+    font-size: 12px;
+    text-align: center;
+    color: #555;
+    background: #fafafa;
+}
+
+/* Category Tabs */
+.foto-nano-category-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+
+.foto-nano-category-tab {
+    padding: 6px 16px;
+    border: 1px solid #ddd;
+    border-radius: 20px;
+    background: #fff;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+}
+
+.foto-nano-category-tab:hover,
+.foto-nano-category-tab.active {
+    background: #667eea;
+    color: #fff;
+    border-color: #667eea;
+}
+
+/* Format Selector */
+.foto-nano-format-selector {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.foto-nano-format-option {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 10px 16px;
+    border: 2px solid #e8e8e8;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    min-width: 70px;
+}
+
+.foto-nano-format-option:hover {
+    border-color: #667eea;
+}
+
+.foto-nano-format-option.selected {
+    border-color: #667eea;
+    background: #f0f2ff;
+}
+
+.foto-nano-format-preview {
+    border: 2px solid #999;
+    margin-bottom: 6px;
+    background: #f5f5f5;
+}
+
+.foto-nano-format-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #555;
+}
+
+/* Input */
+.foto-nano-input {
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid #e8e8e8;
+    border-radius: 8px;
+    font-size: 16px;
+    transition: border-color 0.2s;
+    box-sizing: border-box;
+}
+
+.foto-nano-input:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+/* Actions row */
+.foto-nano-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 25px;
+    gap: 15px;
+}
+
+/* Generating */
+.foto-nano-generating {
+    text-align: center;
+    padding: 60px 20px;
+}
+
+.foto-nano-spinner {
+    width: 60px;
+    height: 60px;
+    border: 4px solid #e8e8e8;
+    border-top-color: #667eea;
+    border-radius: 50%;
+    animation: fotoNanoSpin 0.8s linear infinite;
+    margin: 0 auto 25px;
+}
+
+@keyframes fotoNanoSpin {
+    to { transform: rotate(360deg); }
+}
+
+.foto-nano-progress {
+    width: 100%;
+    max-width: 400px;
+    height: 6px;
+    background: #e8e8e8;
+    border-radius: 3px;
+    margin: 20px auto 0;
+    overflow: hidden;
+}
+
+.foto-nano-progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #667eea, #764ba2);
+    border-radius: 3px;
+    width: 0%;
+    transition: width 0.5s ease;
+}
+
+/* Result */
+.foto-nano-result-image {
+    text-align: center;
+    margin-bottom: 25px;
+}
+
+.foto-nano-result-image img {
+    max-width: 100%;
+    max-height: 70vh;
+    border-radius: 12px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+}
+
+/* Email Section */
+.foto-nano-email-section {
+    background: #f8f9ff;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.foto-nano-email-section label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 10px;
+    color: #333;
+}
+
+.foto-nano-email-row {
+    display: flex;
+    gap: 10px;
+}
+
+.foto-nano-email-row .foto-nano-input {
+    flex: 1;
+}
+
+.foto-nano-email-status {
+    margin-top: 10px;
+    font-size: 14px;
+}
+
+.foto-nano-email-status.success {
+    color: #27ae60;
+}
+
+.foto-nano-email-status.error {
+    color: #e74c3c;
+}
+
+/* Error */
+.foto-nano-error {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #fff;
+    border: 2px solid #e74c3c;
+    border-radius: 12px;
+    padding: 16px 24px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+    z-index: 10000;
+    text-align: center;
+    max-width: 400px;
+}
+
+.foto-nano-error p {
+    color: #e74c3c;
+    margin: 0 0 12px;
+    font-weight: 600;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+    .foto-nano-container {
+        padding: 10px;
+    }
+
+    .foto-nano-header h2 {
+        font-size: 22px;
+    }
+
+    .foto-nano-modes {
+        grid-template-columns: 1fr;
+    }
+
+    .foto-nano-mode-card {
+        padding: 20px 15px;
+    }
+
+    .foto-nano-grid {
+        grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+    }
+
+    .foto-nano-email-row {
+        flex-direction: column;
+    }
+
+    .foto-nano-actions {
+        flex-direction: column;
+    }
+
+    .foto-nano-btn--large {
+        width: 100%;
+    }
+}

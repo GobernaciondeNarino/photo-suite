@@ -1,0 +1,97 @@
+.foto-nano-admin .nav-tab-wrapper {
+    margin-bottom: 20px;
+}
+
+.foto-nano-section {
+    background: #fff;
+    border: 1px solid #ccd0d4;
+    border-radius: 4px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.foto-nano-section h2 {
+    margin-top: 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #eee;
+}
+
+.foto-nano-section h3 {
+    margin-top: 25px;
+}
+
+.foto-nano-item-card {
+    background: #f9f9f9;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 15px;
+    margin-bottom: 15px;
+    position: relative;
+}
+
+.foto-nano-item-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.foto-nano-item-header strong {
+    flex: 1;
+    font-size: 14px;
+}
+
+.foto-nano-badge {
+    background: #0073aa;
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 11px;
+    text-transform: uppercase;
+}
+
+.foto-nano-item-card .form-table {
+    margin: 0;
+}
+
+.foto-nano-item-card .form-table th {
+    width: 150px;
+    padding: 8px 10px 8px 0;
+}
+
+.foto-nano-item-card .form-table td {
+    padding: 8px 10px;
+}
+
+.foto-nano-image-preview {
+    margin-bottom: 8px;
+}
+
+.foto-nano-image-preview img {
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 2px;
+    background: #fff;
+}
+
+.foto-nano-range {
+    width: 200px;
+    vertical-align: middle;
+}
+
+.foto-nano-range-value {
+    display: inline-block;
+    min-width: 40px;
+    text-align: center;
+    font-weight: bold;
+    color: #0073aa;
+}
+
+input[type="color"] {
+    width: 60px;
+    height: 36px;
+    padding: 2px;
+    cursor: pointer;
+}
