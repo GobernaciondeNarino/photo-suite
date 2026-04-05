@@ -19,7 +19,7 @@ class Foto_Nano {
         add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_public_assets' ) );
         add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_assets' ) );
 
-        // Iniciar modulos
+        // Modulos
         Foto_Nano_Admin::get_instance();
         Foto_Nano_Shortcode::get_instance();
 
@@ -32,10 +32,26 @@ class Foto_Nano {
         add_action( 'wp_ajax_nopriv_foto_nano_check_status', array( $this, 'ajax_check_status' ) );
         add_action( 'wp_ajax_foto_nano_send_email', array( $this, 'ajax_send_email' ) );
         add_action( 'wp_ajax_nopriv_foto_nano_send_email', array( $this, 'ajax_send_email' ) );
+
+        // Cron de limpieza
+        add_action( 'foto_nano_cleanup_cron', array( $this, 'run_cleanup' ) );
+
+        // Registrar cron si auto_cleanup esta habilitado
+        $settings = get_option( 'foto_nano_settings', array() );
+        if ( ! empty( $settings['auto_cleanup'] ) && ! wp_next_scheduled( 'foto_nano_cleanup_cron' ) ) {
+            wp_schedule_event( time(), 'hourly', 'foto_nano_cleanup_cron' );
+        }
+
+        // Headers de seguridad para paginas con el shortcode
+        add_action( 'wp_head', array( $this, 'add_security_meta' ) );
     }
 
     public function load_textdomain() {
         load_plugin_textdomain( 'foto-nano', false, dirname( FOTO_NANO_PLUGIN_BASENAME ) . '/languages' );
+    }
+
+    public function add_security_meta() {
+        echo '<meta http-equiv="X-Content-Type-Options" content="nosniff">' . "\n";
     }
 
     public function enqueue_public_assets() {
@@ -53,10 +69,18 @@ class Foto_Nano {
                 FOTO_NANO_VERSION,
                 true
             );
+
+            $settings = get_option( 'foto_nano_settings', array() );
+            $active_provider = $settings['active_provider'] ?? 'replicate';
+            $providers_info = Foto_Nano_Api::get_providers_info();
+
             wp_localize_script( 'foto-nano-public', 'fotoNano', array(
-                'ajaxUrl' => admin_url( 'admin-ajax.php' ),
-                'nonce'   => wp_create_nonce( 'foto_nano_nonce' ),
-                'strings' => array(
+                'ajaxUrl'        => admin_url( 'admin-ajax.php' ),
+                'nonce'          => wp_create_nonce( 'foto_nano_nonce' ),
+                'provider'       => $active_provider,
+                'providerName'   => $providers_info[ $active_provider ]['name'] ?? 'IA',
+                'maxUploadSize'  => (int) ( $settings['max_upload_size'] ?? 10 ),
+                'strings'        => array(
                     'cameraError'    => __( 'No se pudo acceder a la camara. Verifica los permisos.', 'foto-nano' ),
                     'uploading'      => __( 'Subiendo foto...', 'foto-nano' ),
                     'generating'     => __( 'Generando tu imagen con IA...', 'foto-nano' ),
@@ -69,6 +93,8 @@ class Foto_Nano {
                     'downloadReady'  => __( 'Tu imagen esta lista', 'foto-nano' ),
                     'retakePhoto'    => __( 'Retomar foto', 'foto-nano' ),
                     'errorGeneric'   => __( 'Ocurrio un error. Intenta de nuevo.', 'foto-nano' ),
+                    'rateLimited'    => __( 'Has alcanzado el limite de generaciones. Intenta mas tarde.', 'foto-nano' ),
+                    'fileTooLarge'   => __( 'La foto es demasiado grande. Maximo: ', 'foto-nano' ),
                 ),
             ) );
         }
@@ -99,7 +125,7 @@ class Foto_Nano {
     }
 
     /**
-     * AJAX: Subir foto capturada.
+     * AJAX: Subir foto capturada con validacion de seguridad.
      */
     public function ajax_upload_photo() {
         check_ajax_referer( 'foto_nano_nonce', 'nonce' );
@@ -108,34 +134,68 @@ class Foto_Nano {
             wp_send_json_error( array( 'message' => 'No se recibio la foto.' ) );
         }
 
+        // Validar archivo
+        $settings = get_option( 'foto_nano_settings', array() );
+        $max_size = (int) ( $settings['max_upload_size'] ?? 10 );
+        $validation = Foto_Nano_Security::validate_uploaded_file( $_FILES['photo'], $max_size );
+
+        if ( is_wp_error( $validation ) ) {
+            wp_send_json_error( array( 'message' => $validation->get_error_message() ) );
+        }
+
+        // Rate limit para uploads
+        if ( ! Foto_Nano_Security::check_rate_limit( 'upload', 30, 3600 ) ) {
+            wp_send_json_error( array( 'message' => 'Demasiadas solicitudes. Intenta mas tarde.' ) );
+        }
+
         $upload_dir = wp_upload_dir();
         $temp_dir = $upload_dir['basedir'] . '/foto-nano/temp';
-        $filename = 'face_' . uniqid() . '.jpg';
-        $filepath = $temp_dir . '/' . $filename;
+        $filename = 'face_' . wp_generate_password( 16, false ) . '.jpg';
+        $filepath = $temp_dir . '/' . Foto_Nano_Security::sanitize_filename( $filename );
 
         if ( ! move_uploaded_file( $_FILES['photo']['tmp_name'], $filepath ) ) {
             wp_send_json_error( array( 'message' => 'Error al guardar la foto.' ) );
         }
 
         wp_send_json_success( array(
-            'filename' => $filename,
-            'url'      => $upload_dir['baseurl'] . '/foto-nano/temp/' . $filename,
+            'filename' => basename( $filepath ),
+            'url'      => $upload_dir['baseurl'] . '/foto-nano/temp/' . basename( $filepath ),
         ) );
     }
 
     /**
-     * AJAX: Generar imagen con IA.
+     * AJAX: Generar imagen con IA (multi-proveedor).
      */
     public function ajax_generate() {
         check_ajax_referer( 'foto_nano_nonce', 'nonce' );
 
+        $settings = get_option( 'foto_nano_settings', array() );
+
+        // Rate limit
+        $rate_limit = (int) ( $settings['rate_limit_per_hour'] ?? 20 );
+        if ( ! Foto_Nano_Security::check_rate_limit( 'generate', $rate_limit, 3600 ) ) {
+            wp_send_json_error( array( 'message' => 'Has alcanzado el limite de generaciones por hora. Intenta mas tarde.' ) );
+        }
+
         $mode     = sanitize_text_field( $_POST['mode'] ?? '' );
-        $photo    = sanitize_file_name( $_POST['photo'] ?? '' );
+        $photo    = Foto_Nano_Security::sanitize_filename( $_POST['photo'] ?? '' );
         $formato  = sanitize_text_field( $_POST['formato'] ?? '1:1' );
         $options  = isset( $_POST['options'] ) ? $_POST['options'] : array();
 
         if ( empty( $mode ) || empty( $photo ) ) {
             wp_send_json_error( array( 'message' => 'Faltan datos requeridos.' ) );
+        }
+
+        // Validar formato
+        $allowed_formats = array( '1:1', '9:16', '16:9', '4:3', '3:4' );
+        if ( ! in_array( $formato, $allowed_formats, true ) ) {
+            $formato = '1:1';
+        }
+
+        // Validar modo
+        $allowed_modes = array( 'mascota', 'fondo', 'postal' );
+        if ( ! in_array( $mode, $allowed_modes, true ) ) {
+            wp_send_json_error( array( 'message' => 'Modo de generacion no valido.' ) );
         }
 
         $upload_dir = wp_upload_dir();
@@ -145,27 +205,36 @@ class Foto_Nano {
             wp_send_json_error( array( 'message' => 'Foto no encontrada.' ) );
         }
 
-        $settings = get_option( 'foto_nano_settings', array() );
-        $api = new Foto_Nano_Api( $settings['replicate_api_key'] ?? '' );
+        // Inicializar API con proveedor activo
+        $api = new Foto_Nano_Api();
 
-        // Componer imagen template segun modo
+        // Componer template
         $template_path = $this->compose_template( $mode, $options, $formato, $settings );
 
         if ( is_wp_error( $template_path ) ) {
             wp_send_json_error( array( 'message' => $template_path->get_error_message() ) );
         }
 
-        // Enviar a Replicate para face-swap
-        $result = $api->create_prediction( $face_path, $template_path );
+        // Enviar al proveedor de IA
+        $result = $api->create_prediction( $face_path, $template_path, array( 'formato' => $formato ) );
 
         if ( is_wp_error( $result ) ) {
             wp_send_json_error( array( 'message' => $result->get_error_message() ) );
         }
 
-        wp_send_json_success( array(
-            'prediction_id' => $result['id'],
+        $response = array(
+            'prediction_id' => $result['prediction_id'],
             'status'        => $result['status'],
-        ) );
+            'provider'      => $result['provider'] ?? $api->get_provider_id(),
+        );
+
+        // Si el proveedor es sincrono y ya tiene resultado
+        if ( ! empty( $result['synchronous'] ) && $result['status'] === 'succeeded' ) {
+            $response['image_url']  = $result['output'];
+            $response['image_file'] = $result['image_file'] ?? '';
+        }
+
+        wp_send_json_success( $response );
     }
 
     /**
@@ -175,14 +244,13 @@ class Foto_Nano {
         check_ajax_referer( 'foto_nano_nonce', 'nonce' );
 
         $prediction_id = sanitize_text_field( $_POST['prediction_id'] ?? '' );
+        $provider_id   = sanitize_key( $_POST['provider'] ?? '' );
 
         if ( empty( $prediction_id ) ) {
             wp_send_json_error( array( 'message' => 'ID de prediccion no proporcionado.' ) );
         }
 
-        $settings = get_option( 'foto_nano_settings', array() );
-        $api = new Foto_Nano_Api( $settings['replicate_api_key'] ?? '' );
-
+        $api = new Foto_Nano_Api( $provider_id ?: null );
         $result = $api->get_prediction( $prediction_id );
 
         if ( is_wp_error( $result ) ) {
@@ -196,16 +264,18 @@ class Foto_Nano {
         if ( $result['status'] === 'succeeded' ) {
             $output_url = is_array( $result['output'] ) ? $result['output'][0] : $result['output'];
 
-            // Descargar imagen generada
-            $upload_dir = wp_upload_dir();
-            $gen_filename = 'foto_nano_' . uniqid() . '.jpg';
-            $gen_path = $upload_dir['basedir'] . '/foto-nano/generated/' . $gen_filename;
+            if ( $output_url ) {
+                // Descargar imagen generada
+                $upload_dir = wp_upload_dir();
+                $gen_filename = 'foto_nano_' . wp_generate_password( 12, false ) . '.jpg';
+                $gen_path = $upload_dir['basedir'] . '/foto-nano/generated/' . $gen_filename;
 
-            $image_data = wp_remote_get( $output_url );
-            if ( ! is_wp_error( $image_data ) ) {
-                file_put_contents( $gen_path, wp_remote_retrieve_body( $image_data ) );
-                $response['image_url'] = $upload_dir['baseurl'] . '/foto-nano/generated/' . $gen_filename;
-                $response['image_file'] = $gen_filename;
+                $image_data = wp_remote_get( $output_url, array( 'timeout' => 60 ) );
+                if ( ! is_wp_error( $image_data ) ) {
+                    file_put_contents( $gen_path, wp_remote_retrieve_body( $image_data ) );
+                    $response['image_url'] = $upload_dir['baseurl'] . '/foto-nano/generated/' . $gen_filename;
+                    $response['image_file'] = $gen_filename;
+                }
             }
         } elseif ( $result['status'] === 'failed' ) {
             $response['error'] = $result['error'] ?? 'La generacion fallo.';
@@ -220,8 +290,13 @@ class Foto_Nano {
     public function ajax_send_email() {
         check_ajax_referer( 'foto_nano_nonce', 'nonce' );
 
+        // Rate limit para emails
+        if ( ! Foto_Nano_Security::check_rate_limit( 'email', 5, 3600 ) ) {
+            wp_send_json_error( array( 'message' => 'Demasiados correos enviados. Intenta mas tarde.' ) );
+        }
+
         $email = sanitize_email( $_POST['email'] ?? '' );
-        $image_file = sanitize_file_name( $_POST['image_file'] ?? '' );
+        $image_file = Foto_Nano_Security::sanitize_filename( $_POST['image_file'] ?? '' );
 
         if ( empty( $email ) || ! is_email( $email ) ) {
             wp_send_json_error( array( 'message' => 'Correo electronico no valido.' ) );
@@ -242,6 +317,13 @@ class Foto_Nano {
         } else {
             wp_send_json_error( array( 'message' => 'Error al enviar el correo.' ) );
         }
+    }
+
+    /**
+     * Cron: limpiar archivos temporales.
+     */
+    public function run_cleanup() {
+        Foto_Nano_Security::cleanup_temp_files();
     }
 
     /**
@@ -278,7 +360,7 @@ class Foto_Nano {
         }
 
         $upload_dir = wp_upload_dir();
-        $template_file = 'template_' . uniqid() . '.jpg';
+        $template_file = 'template_' . wp_generate_password( 12, false ) . '.jpg';
         $template_path = $upload_dir['basedir'] . '/foto-nano/temp/' . $template_file;
 
         imagejpeg( $canvas, $template_path, 95 );
@@ -287,14 +369,10 @@ class Foto_Nano {
         return $template_path;
     }
 
-    /**
-     * Componer template: Persona con mascota.
-     */
     private function compose_mascota( $canvas, $options, $settings, $width, $height ) {
         $mascota_id = sanitize_text_field( $options['mascota_id'] ?? '' );
         $mascotas = $settings['mascotas'] ?? array();
 
-        // Buscar mascota seleccionada
         $mascota = null;
         foreach ( $mascotas as $m ) {
             if ( ( $m['id'] ?? '' ) === $mascota_id ) {
@@ -307,7 +385,6 @@ class Foto_Nano {
             return new WP_Error( 'no_mascota', 'Mascota no encontrada.' );
         }
 
-        // Fondo
         $bg_path = $mascota['fondo'] ?? '';
         if ( $bg_path ) {
             $bg = $this->load_image( $bg_path );
@@ -317,7 +394,6 @@ class Foto_Nano {
             }
         }
 
-        // Mascota
         $mascota_path = $mascota['imagen'] ?? '';
         if ( $mascota_path ) {
             $pet_img = $this->load_image( $mascota_path );
@@ -334,7 +410,7 @@ class Foto_Nano {
                     case 'centro':
                         $pet_x = (int) ( ( $width - $pet_w ) / 2 );
                         break;
-                    default: // derecha
+                    default:
                         $pet_x = (int) ( $width - $pet_w - $width * 0.05 );
                         break;
                 }
@@ -348,9 +424,6 @@ class Foto_Nano {
         return $canvas;
     }
 
-    /**
-     * Componer template: Fondo escenico.
-     */
     private function compose_fondo( $canvas, $options, $settings, $width, $height ) {
         $fondo_id = sanitize_text_field( $options['fondo_id'] ?? '' );
         $fondos = $settings['fondos'] ?? array();
@@ -379,11 +452,7 @@ class Foto_Nano {
         return $canvas;
     }
 
-    /**
-     * Componer template: Postal.
-     */
     private function compose_postal( $canvas, $options, $settings, $width, $height ) {
-        // Fondo
         $fondo_id = sanitize_text_field( $options['fondo_id'] ?? '' );
         $fondos = $settings['fondos'] ?? array();
         foreach ( $fondos as $f ) {
@@ -400,7 +469,6 @@ class Foto_Nano {
             }
         }
 
-        // Mascota en postal
         $mascota_id = sanitize_text_field( $options['mascota_id'] ?? '' );
         if ( $mascota_id ) {
             $mascotas = $settings['mascotas'] ?? array();
@@ -424,7 +492,6 @@ class Foto_Nano {
             }
         }
 
-        // Marco
         $marco_id = sanitize_text_field( $options['marco_id'] ?? '' );
         if ( $marco_id ) {
             $marcos = $settings['postal_marcos'] ?? array();
@@ -443,7 +510,6 @@ class Foto_Nano {
             }
         }
 
-        // Texto postal
         $nombre = sanitize_text_field( $options['nombre'] ?? '' );
         $texto = sanitize_text_field( $options['texto_postal'] ?? ( $settings['postal_texto_defecto'] ?? '' ) );
         $font_size = (int) ( $settings['postal_fuente_size'] ?? 24 );
@@ -455,21 +521,16 @@ class Foto_Nano {
         $text_color = imagecolorallocate( $canvas, $r, $g, $b );
         $shadow_color = imagecolorallocate( $canvas, 0, 0, 0 );
 
-        // Nombre de la persona
         if ( $nombre ) {
             $name_y = $height - (int) ( $height * 0.08 );
             $name_x = (int) ( $width * 0.05 );
-
-            // Sombra
             imagestring( $canvas, 5, $name_x + 1, $name_y + 1, $nombre, $shadow_color );
             imagestring( $canvas, 5, $name_x, $name_y, $nombre, $text_color );
         }
 
-        // Texto de la postal
         if ( $texto ) {
             $text_y = $height - (int) ( $height * 0.04 );
             $text_x = (int) ( $width * 0.05 );
-
             imagestring( $canvas, 4, $text_x + 1, $text_y + 1, $texto, $shadow_color );
             imagestring( $canvas, 4, $text_x, $text_y, $texto, $text_color );
         }
@@ -477,11 +538,7 @@ class Foto_Nano {
         return $canvas;
     }
 
-    /**
-     * Cargar imagen desde path o URL.
-     */
     private function load_image( $path ) {
-        // Si es URL, convertir a path del servidor
         $path = $this->url_to_path( $path );
 
         if ( ! file_exists( $path ) ) {
@@ -512,22 +569,15 @@ class Foto_Nano {
         }
     }
 
-    /**
-     * Convertir URL a path del servidor.
-     */
     private function url_to_path( $url ) {
         if ( empty( $url ) || strpos( $url, 'http' ) !== 0 ) {
-            return $url; // Ya es un path
+            return $url;
         }
         $upload_dir = wp_upload_dir();
         return str_replace( $upload_dir['baseurl'], $upload_dir['basedir'], $url );
     }
 
-    /**
-     * Obtener dimensiones segun formato.
-     */
     private function get_dimensions_from_format( $formato ) {
-        $base = 1080;
         switch ( $formato ) {
             case '9:16':
                 return array( 'width' => 1080, 'height' => 1920 );

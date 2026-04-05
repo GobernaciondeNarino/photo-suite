@@ -13,14 +13,17 @@
             selectedFormato: null,
             activeFondoCategory: 'todos',
             predictionId: null,
+            provider: null,
             pollTimer: null,
             progressValue: 0,
-            progressTimer: null
+            progressTimer: null,
+            generationCount: 0
         },
 
         init: function() {
             this.bindEvents();
             this.state.selectedFormato = (typeof fotoNanoData !== 'undefined') ? fotoNanoData.formatoDefecto : '1:1';
+            this.state.provider = (typeof fotoNano !== 'undefined') ? fotoNano.provider : 'replicate';
             this.startCamera();
         },
 
@@ -76,6 +79,19 @@
                 self.state.activeFondoCategory = $(this).data('category');
                 self.renderFondoGrid();
             });
+
+            // Cerrar error con click
+            $(document).on('click', '#foto-nano-error', function() {
+                $(this).fadeOut(200);
+            });
+
+            // Teclado: Enter para email
+            $('#foto-nano-email').on('keypress', function(e) {
+                if (e.which === 13) {
+                    e.preventDefault();
+                    self.sendEmail();
+                }
+            });
         },
 
         // --- Camera ---
@@ -88,7 +104,9 @@
                 }).then(function(stream) {
                     self.state.stream = stream;
                     var video = document.getElementById('foto-nano-video');
-                    video.srcObject = stream;
+                    if (video) {
+                        video.srcObject = stream;
+                    }
                 }).catch(function() {
                     self.showError(fotoNano.strings.cameraError);
                 });
@@ -107,11 +125,12 @@
         capturePhoto: function() {
             var video = document.getElementById('foto-nano-video');
             var canvas = document.getElementById('foto-nano-canvas');
+            if (!video || !canvas) return;
+
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
 
             var ctx = canvas.getContext('2d');
-            // Flip horizontal (mirror)
             ctx.translate(canvas.width, 0);
             ctx.scale(-1, 1);
             ctx.drawImage(video, 0, 0);
@@ -119,6 +138,13 @@
 
             var self = this;
             canvas.toBlob(function(blob) {
+                // Validar tamano del archivo
+                var maxSize = (typeof fotoNano !== 'undefined' ? fotoNano.maxUploadSize : 10) * 1024 * 1024;
+                if (blob.size > maxSize) {
+                    self.showError(fotoNano.strings.fileTooLarge + (maxSize / 1024 / 1024) + 'MB');
+                    return;
+                }
+
                 self.state.photoBlob = blob;
                 var url = URL.createObjectURL(blob);
                 $('#foto-nano-captured').attr('src', url);
@@ -149,6 +175,12 @@
             if (screenName === 'capture' && !this.state.stream && !this.state.photoBlob) {
                 this.startCamera();
             }
+
+            // Scroll to top of container
+            var container = document.getElementById('foto-nano-app');
+            if (container) {
+                container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
         },
 
         // --- Mode selection ---
@@ -163,7 +195,6 @@
         },
 
         setupOptionsScreen: function(mode) {
-            // Hide all option groups first
             $('#foto-nano-opt-mascota, #foto-nano-opt-fondo, #foto-nano-opt-marco, #foto-nano-opt-nombre, #foto-nano-opt-texto').hide();
 
             switch (mode) {
@@ -199,12 +230,12 @@
             var html = '';
             var mascotas = (typeof fotoNanoData !== 'undefined') ? fotoNanoData.mascotas : [];
             mascotas.forEach(function(m) {
-                html += '<div class="foto-nano-grid-item" data-id="' + m.id + '">';
-                html += '<img src="' + m.imagen + '" alt="' + m.nombre + '">';
-                html += '<div class="foto-nano-grid-item-name">' + m.nombre + '</div>';
+                html += '<div class="foto-nano-grid-item" data-id="' + this.escapeHtml(m.id) + '">';
+                html += '<img src="' + this.escapeHtml(m.imagen) + '" alt="' + this.escapeHtml(m.nombre) + '" loading="lazy">';
+                html += '<div class="foto-nano-grid-item-name">' + this.escapeHtml(m.nombre) + '</div>';
                 html += '</div>';
-            });
-            $('#foto-nano-mascota-grid').html(html || '<p style="color:#999;">No hay mascotas configuradas.</p>');
+            }.bind(this));
+            $('#foto-nano-mascota-grid').html(html || '<p style="color:var(--fn-text-muted);text-align:center;padding:20px;">No hay mascotas configuradas.</p>');
         },
 
         renderFondoTabs: function() {
@@ -226,27 +257,29 @@
             var html = '';
             var fondos = (typeof fotoNanoData !== 'undefined') ? fotoNanoData.fondos : [];
             var category = this.state.activeFondoCategory;
+            var self = this;
 
             fondos.forEach(function(f) {
                 if (category !== 'todos' && f.categoria !== category) return;
-                html += '<div class="foto-nano-grid-item" data-id="' + f.id + '">';
-                html += '<img src="' + f.imagen + '" alt="' + f.nombre + '">';
-                html += '<div class="foto-nano-grid-item-name">' + f.nombre + '</div>';
+                html += '<div class="foto-nano-grid-item" data-id="' + self.escapeHtml(f.id) + '">';
+                html += '<img src="' + self.escapeHtml(f.imagen) + '" alt="' + self.escapeHtml(f.nombre) + '" loading="lazy">';
+                html += '<div class="foto-nano-grid-item-name">' + self.escapeHtml(f.nombre) + '</div>';
                 html += '</div>';
             });
-            $('#foto-nano-fondo-grid').html(html || '<p style="color:#999;">No hay fondos configurados.</p>');
+            $('#foto-nano-fondo-grid').html(html || '<p style="color:var(--fn-text-muted);text-align:center;padding:20px;">No hay fondos configurados.</p>');
         },
 
         renderMarcoGrid: function() {
             var html = '';
             var marcos = (typeof fotoNanoData !== 'undefined') ? fotoNanoData.marcos : [];
+            var self = this;
             marcos.forEach(function(m) {
-                html += '<div class="foto-nano-grid-item" data-id="' + m.id + '">';
-                html += '<img src="' + m.imagen + '" alt="' + m.nombre + '">';
-                html += '<div class="foto-nano-grid-item-name">' + m.nombre + '</div>';
+                html += '<div class="foto-nano-grid-item" data-id="' + self.escapeHtml(m.id) + '">';
+                html += '<img src="' + self.escapeHtml(m.imagen) + '" alt="' + self.escapeHtml(m.nombre) + '" loading="lazy">';
+                html += '<div class="foto-nano-grid-item-name">' + self.escapeHtml(m.nombre) + '</div>';
                 html += '</div>';
             });
-            $('#foto-nano-marco-grid').html(html || '<p style="color:#999;">No hay marcos configurados.</p>');
+            $('#foto-nano-marco-grid').html(html || '<p style="color:var(--fn-text-muted);text-align:center;padding:20px;">No hay marcos configurados.</p>');
         },
 
         renderFormatSelector: function() {
@@ -283,7 +316,6 @@
             var self = this;
             var mode = this.state.selectedMode;
 
-            // Validacion
             if (!this.state.photoBlob) {
                 this.showError('Primero debes tomar una foto.');
                 return;
@@ -307,6 +339,7 @@
             // Subir foto primero
             this.showScreen('generating');
             this.startProgress();
+            this.updateGeneratingStatus('Subiendo tu foto...');
 
             var formData = new FormData();
             formData.append('action', 'foto_nano_upload_photo');
@@ -322,6 +355,7 @@
                 success: function(response) {
                     if (response.success) {
                         self.state.photoFilename = response.data.filename;
+                        self.updateGeneratingStatus('Enviando a ' + (fotoNano.providerName || 'IA') + '...');
                         self.requestGeneration();
                     } else {
                         self.stopProgress();
@@ -371,7 +405,19 @@
                 success: function(response) {
                     if (response.success) {
                         self.state.predictionId = response.data.prediction_id;
-                        self.startPolling();
+                        self.state.provider = response.data.provider;
+
+                        // Proveedor sincrono: resultado inmediato
+                        if (response.data.image_url) {
+                            self.completeProgress();
+                            setTimeout(function() {
+                                self.showResult(response.data.image_url, response.data.image_file);
+                            }, 400);
+                        } else {
+                            // Proveedor asincrono: iniciar polling
+                            self.updateGeneratingStatus('La IA esta procesando tu imagen...');
+                            self.startPolling();
+                        }
                     } else {
                         self.stopProgress();
                         self.showError(response.data.message || fotoNano.strings.errorGeneric);
@@ -402,7 +448,8 @@
                 data: {
                     action: 'foto_nano_check_status',
                     nonce: fotoNano.nonce,
-                    prediction_id: this.state.predictionId
+                    prediction_id: this.state.predictionId,
+                    provider: this.state.provider
                 },
                 success: function(response) {
                     if (!response.success) {
@@ -427,7 +474,6 @@
                         self.showError(data.error || 'La generacion fallo.');
                         self.showScreen('options');
                     }
-                    // 'starting' o 'processing' -> seguir polling
                 },
                 error: function() {
                     // No detener, reintentar
@@ -450,7 +496,7 @@
 
             this.state.progressTimer = setInterval(function() {
                 if (self.state.progressValue < 90) {
-                    self.state.progressValue += Math.random() * 5 + 1;
+                    self.state.progressValue += Math.random() * 4 + 1;
                     if (self.state.progressValue > 90) self.state.progressValue = 90;
                     $('#foto-nano-progress-bar').css('width', self.state.progressValue + '%');
                 }
@@ -469,9 +515,14 @@
             }
         },
 
+        updateGeneratingStatus: function(msg) {
+            $('#foto-nano-generating-status').text(msg);
+        },
+
         // --- Result ---
         showResult: function(imageUrl, imageFile) {
             this.state.imageFile = imageFile;
+            this.state.generationCount++;
             $('#foto-nano-result-img').attr('src', imageUrl);
             $('#foto-nano-btn-download').attr('href', imageUrl);
             $('#foto-nano-email-status').text('').removeClass('success error');
@@ -540,6 +591,14 @@
 
             this.startCamera();
             this.showScreen('capture');
+        },
+
+        // --- Security: escape HTML ---
+        escapeHtml: function(str) {
+            if (!str) return '';
+            var div = document.createElement('div');
+            div.appendChild(document.createTextNode(str));
+            return div.innerHTML;
         },
 
         // --- Error ---
